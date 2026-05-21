@@ -6,6 +6,7 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\Security\Http\Event\LoginSuccessEvent;
 use Symfony\Component\HttpFoundation\Cookie;
 use Lexik\Bundle\JWTAuthenticationBundle\Services\JWTTokenManagerInterface;
+use Lexik\Bundle\JWTAuthenticationBundle\Event\AuthenticationSuccessEvent;
 
 class LoginSuccessListener implements EventSubscriberInterface
 {
@@ -28,14 +29,18 @@ class LoginSuccessListener implements EventSubscriberInterface
             return;
         }
 
-        // Generate JWT token
-        $token = $this->jwtManager->create($user);
+        // Generate access token (short-lived: 15 minutes)
+        $accessToken = $this->jwtManager->create($user);
 
-        // Create HTTP-Only cookie with the token
-        $cookie = new Cookie(
+        // Generate refresh token (long-lived: 7 days)
+        // Note: In a production app, you should store refresh tokens in database
+        $refreshToken = bin2hex(random_bytes(32));
+
+        // Create HTTP-Only cookie for access token
+        $accessCookie = new Cookie(
             'BEARER_TOKEN',           // Cookie name
-            $token,                   // Token value
-            time() + (24 * 3600),     // Expiration: 24 hours
+            $accessToken,             // Token value
+            time() + (15 * 60),       // Expiration: 15 minutes
             '/',                      // Path
             null,                     // Domain (null = current domain)
             true,                     // Secure (true for HTTPS only)
@@ -44,9 +49,23 @@ class LoginSuccessListener implements EventSubscriberInterface
             'Lax'                     // SameSite
         );
 
-        // Add cookie to response
+        // Create HTTP-Only cookie for refresh token
+        $refreshCookie = new Cookie(
+            'REFRESH_TOKEN',          // Cookie name
+            $refreshToken,            // Token value
+            time() + (7 * 24 * 3600), // Expiration: 7 days
+            '/api/refresh-token',     // Path (only sent to refresh endpoint)
+            null,                     // Domain
+            true,                     // Secure
+            true,                     // HTTP-Only
+            false,                    // Raw
+            'Lax'                     // SameSite
+        );
+
+        // Add cookies to response
         $response = $event->getResponse();
-        $response->headers->setCookie($cookie);
+        $response->headers->setCookie($accessCookie);
+        $response->headers->setCookie($refreshCookie);
 
         // Remove token from response body (we don't want to expose it in JSON)
         $content = json_decode($response->getContent(), true);

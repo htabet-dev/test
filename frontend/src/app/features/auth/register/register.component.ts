@@ -1,8 +1,9 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, OnDestroy } from '@angular/core';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterModule } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
 import { NgIf } from '@angular/common';
+import { Subject, takeUntil } from 'rxjs';
 
 @Component({
   selector: 'app-register',
@@ -68,10 +69,10 @@ import { NgIf } from '@angular/common';
 
           <button 
             type="submit" 
-            [disabled]="registerForm.invalid || isLoading()"
+            [disabled]="registerForm.invalid || isLoading"
             class="btn-primary"
           >
-            {{ isLoading() ? 'Inscription en cours...' : "S'inscrire" }}
+            {{ isLoading ? "Inscription en cours..." : "S'inscrire" }}
           </button>
 
           <div *ngIf="errorMessage" class="error-message global">
@@ -200,15 +201,16 @@ import { NgIf } from '@angular/common';
     }
   `]
 })
-export class RegisterComponent {
+export class RegisterComponent implements OnDestroy {
   private fb = inject(FormBuilder);
   private authService = inject(AuthService);
   private router = inject(Router);
+  
+  private destroy$ = new Subject<void>();
 
   registerForm: FormGroup;
   errorMessage: string | null = null;
-
-  isLoading = this.authService.isLoading;
+  isLoading = false;
 
   constructor() {
     this.registerForm = this.fb.group({
@@ -217,6 +219,11 @@ export class RegisterComponent {
       email: ['', [Validators.required, Validators.email]],
       password: ['', [Validators.required, Validators.minLength(6)]]
     });
+    
+    // S'abonner à l'état de chargement avec Observable
+    this.authService.isLoading$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(loading => this.isLoading = loading);
   }
 
   get firstName() {
@@ -235,7 +242,7 @@ export class RegisterComponent {
     return this.registerForm.get('password');
   }
 
-  async onSubmit(): Promise<void> {
+  onSubmit(): void {
     if (this.registerForm.invalid) {
       this.registerForm.markAllAsTouched();
       return;
@@ -243,15 +250,25 @@ export class RegisterComponent {
 
     this.errorMessage = null;
 
-    try {
-      await this.authService.register({
-        firstName: this.firstName?.value,
-        lastName: this.lastName?.value,
-        email: this.email?.value,
-        password: this.password?.value
-      });
-    } catch (error) {
-      this.errorMessage = error as string;
-    }
+    // Utilisation des Observables au lieu des Promises
+    this.authService.register({
+      firstName: this.firstName?.value,
+      lastName: this.lastName?.value,
+      email: this.email?.value,
+      password: this.password?.value
+    }).pipe(takeUntil(this.destroy$))
+    .subscribe({
+      next: () => {
+        // La navigation est gérée dans le service
+      },
+      error: (error) => {
+        this.errorMessage = error;
+      }
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
   }
 }
