@@ -1,0 +1,79 @@
+version: '3.8'
+
+services:
+  # --- Base de données PostgreSQL ---
+  database:
+    image: postgres:15-alpine
+    container_name: app_database
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-app_db}
+      POSTGRES_USER: ${DB_USER:-app_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-ChangeMeInProd!}
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks:
+      - app_network
+
+  # --- Backend Symfony (PHP) ---
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: app_backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: "postgresql://${DB_USER:-app_user}:${DB_PASSWORD:-ChangeMeInProd!}@database:5432/${DB_NAME:-app_db}?serverVersion=15&charset=utf8"
+      JWT_SECRET_KEY: "%kernel.project_dir%/config/jwt/private.pem"
+      JWT_PUBLIC_KEY: "%kernel.project_dir%/config/jwt/public.pem"
+      JWT_PASSPHRASE: ${JWT_PASSPHRASE:-MySuperSecretPassphrase}
+      CORS_ALLOW_ORIGIN: "^https?://(localhost|127\\.0\\.0\\.1|frontend)(:[0-9]+)?$"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/var/www/html
+      - ./backend/config/jwt:/var/www/html/config/jwt
+    depends_on:
+      - database
+    command: >
+      sh -c "
+        php bin/console doctrine:database:create --if-not-exists &&
+        php bin/console doctrine:migrations:migrate --no-interaction &&
+        php bin/console lexik:jwt:generate-keypair --skip-if-exists &&
+        php -d memory_limit=512M -d max_execution_time=300 bin/console server:run 0.0.0.0:8000
+      "
+    networks:
+      - app_network
+
+  # --- Frontend Angular (Node) ---
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: app_frontend
+    restart: unless-stopped
+    environment:
+      API_URL: http://localhost:8000
+    ports:
+      - "4200:4200"
+    volumes:
+      - ./frontend:/usr/src/app
+      - /usr/src/app/node_modules
+    depends_on:
+      - backend
+    command: >
+      sh -c "
+        npm install &&
+        ng serve --host 0.0.0.0 --poll 1000
+      "
+    networks:
+      - app_network
+
+volumes:
+  db_data:
+
+networks:
+  app_network:
+    driver: bridge
