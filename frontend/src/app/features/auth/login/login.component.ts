@@ -1,8 +1,9 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, OnDestroy } from '@angular/core';
 import { FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router, RouterModule } from '@angular/router';
 import { AuthService } from '../../core/services/auth.service';
 import { NgIf } from '@angular/common';
+import { Subject, takeUntil } from 'rxjs';
 
 @Component({
   selector: 'app-login',
@@ -44,10 +45,10 @@ import { NgIf } from '@angular/common';
 
           <button 
             type="submit" 
-            [disabled]="loginForm.invalid || isLoading()"
+            [disabled]="loginForm.invalid || isLoading"
             class="btn-primary"
           >
-            {{ isLoading() ? 'Connexion en cours...' : 'Se connecter' }}
+            {{ isLoading ? 'Connexion en cours...' : 'Se connecter' }}
           </button>
 
           <div *ngIf="errorMessage" class="error-message global">
@@ -168,21 +169,27 @@ import { NgIf } from '@angular/common';
     }
   `]
 })
-export class LoginComponent {
+export class LoginComponent implements OnDestroy {
   private fb = inject(FormBuilder);
   private authService = inject(AuthService);
   private router = inject(Router);
+  
+  private destroy$ = new Subject<void>();
 
   loginForm: FormGroup;
   errorMessage: string | null = null;
-
-  isLoading = this.authService.isLoading;
+  isLoading = false;
 
   constructor() {
     this.loginForm = this.fb.group({
       email: ['', [Validators.required, Validators.email]],
       password: ['', [Validators.required, Validators.minLength(6)]]
     });
+    
+    // S'abonner à l'état de chargement avec Observable
+    this.authService.isLoading$
+      .pipe(takeUntil(this.destroy$))
+      .subscribe(loading => this.isLoading = loading);
   }
 
   get email() {
@@ -193,7 +200,7 @@ export class LoginComponent {
     return this.loginForm.get('password');
   }
 
-  async onSubmit(): Promise<void> {
+  onSubmit(): void {
     if (this.loginForm.invalid) {
       this.loginForm.markAllAsTouched();
       return;
@@ -201,13 +208,23 @@ export class LoginComponent {
 
     this.errorMessage = null;
 
-    try {
-      await this.authService.login(
-        this.email?.value,
-        this.password?.value
-      );
-    } catch (error) {
-      this.errorMessage = error as string;
-    }
+    // Utilisation des Observables au lieu des Promises
+    this.authService.login(
+      this.email?.value,
+      this.password?.value
+    ).pipe(takeUntil(this.destroy$))
+    .subscribe({
+      next: () => {
+        // La navigation est gérée dans le service
+      },
+      error: (error) => {
+        this.errorMessage = error;
+      }
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
   }
 }
