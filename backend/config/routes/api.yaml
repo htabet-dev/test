@@ -1,0 +1,11 @@
+api_login:
+    path: /api/login
+
+api_register:
+    path: /api/register
+
+api_me:
+    path: /api/me
+
+api_logout:
+    path: /api/logout
