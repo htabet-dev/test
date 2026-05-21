@@ -1,0 +1,36 @@
+# This file is the entry point for all your configuration files.
+imports:
+    - { resource: 'framework.yaml' }
+    - { resource: 'doctrine.yaml' }
+    - { resource: 'security.yaml' }
+    - { resource: 'lexik_jwt_authentication.yaml' }
+    - { resource: 'nelmio_cors.yaml' }
+    - { resource: 'api_platform.yaml' }
+
+when@dev:
+    imports:
+        - { resource: 'web_profiler.yaml' }
+
+when@test:
+    imports:
+        - { resource: 'framework_test.yaml' }
+
+services:
+    _defaults:
+        autowire: true
+        autoconfigure: true
+
+    App\:
+        resource: '../src/'
+        exclude:
+            - '../src/DependencyInjection/'
+            - '../src/Entity/'
+            - '../src/Kernel.php'
+
+    App\EventSubscriber\LoginSuccessListener:
+        tags:
+            - { name: kernel.event_subscriber }
+
+    App\EventSubscriber\ExceptionListener:
+        tags:
+            - { name: kernel.event_subscriber }
