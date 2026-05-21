@@ -7,9 +7,6 @@ vendor/
 dist/
 build/
 target/
-*.o
-*.obj
-*.out
 
 # Python
 __pycache__/
@@ -20,36 +17,33 @@ __pycache__/
 env/
 venv/
 .venv/
-.env
-.env.local
-.env.*
+.ENV
+.ENV.local
 
 # Logs
 *.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
 
-# Coverage
-coverage/
-htmlcov/
-.coverage
+# Environment variables
+.env
+.env.local
+.env.*
 
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
-*.tmp
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Cache
-.cache/
-.mypy_cache/
-.pytest_cache/
-.nyc_output/
+# Coverage
 coverage/
+htmlcov/
+.coverage
+
+# Temporary files
+*.tmp
+*.temp
 ```
